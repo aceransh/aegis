@@ -90,21 +90,23 @@ graph TD
 
 ## 🛣️ Project Roadmap
 
-* [x] **Phase 1: Backend Task Queue (Go)**
-* [x] HTTP Broker API (`/enqueue` job endpoints)
-* [x] PostgreSQL state engine with row-level concurrency locking
-* [x] Worker polling, exponential backoff, and DLQ handling
-
-* [🔄] **Phase 2: Infrastructure as Code (Terraform)**
-* [x] Excalidraw & Mermaid architectural blueprints
-* [ ] Multi-AZ VPC module (Subnets, Internet Gateway, Route Tables)
-* [ ] ECS Fargate task definitions & ALB routing
-* [ ] Managed RDS PostgreSQL provisioning
-
-* [ ] **Phase 3: Autonomous AI SRE Engine**
-* [ ] CloudWatch alarm triggering
-* [ ] Python/Go Lambda RCA handler (Bedrock + GitHub Context + Slack Webhook)
-* [ ] Human-in-the-loop rollback webhook integration
+- [x] **Phase 1: Backend Task Queue (Go)**
+  - [x] HTTP Broker API (`/enqueue` job endpoints)
+  - [x] PostgreSQL state engine with row-level concurrency locking (`SKIP LOCKED`)
+  - [x] Worker polling, exponential backoff, and DLQ handling
+- [🔄] **Phase 2: Infrastructure as Code (Terraform)**
+  - [x] Excalidraw & Mermaid architectural blueprints
+  - [ ] AWS Networking module (Multi-AZ capable, deployable as Single-AZ)
+  - [ ] ECS Fargate task definitions & ALB routing
+  - [ ] Managed RDS PostgreSQL provisioning
+- [ ] **Phase 3: Autonomous AI SRE Engine**
+  - [ ] CloudWatch metric stream & alarm thresholding (>5% error rate)
+  - [ ] Lambda RCA handler (Gemini/Amazon Bedrock + GitHub Commit Context + Slack Webhooks)
+  - [ ] Human-in-the-loop rollback approval integration
+- [ ] **Phase 4: Chaos Engineering & Failure Injection (Demo Suite)**
+  - [ ] **Application-Level:** Poison-pill payloads & synthetic 500 error spikes
+  - [ ] **Infrastructure-Level:** ECS Fargate container termination & network latency injection
+  - [ ] *(Optional)* **Database-Level:** Connection pool exhaustion & deadlock simulation
 
 ---
 
