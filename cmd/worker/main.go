@@ -45,6 +45,48 @@ func pollForJob(client *http.Client, workerID string) (*models.Job, error) {
 
 }
 
+func ackJob(client *http.Client, workerID string, jobID string, leaseID int64) error {
+	reqBody := models.AckRequest{WorkerID: workerID, JobID: jobID, LeaseID: leaseID}
+	jsonBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed marshall req: %v", err)
+	}
+
+	ackUrl := fmt.Sprintf("%s/ack", brokerURL)
+	resp, err := client.Post(ackUrl, "application/json", bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return fmt.Errorf("network error during ack: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("broker returned unexpected status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func failJob(client *http.Client, workerID string, jobID string, leaseID int64) error {
+	reqBody := models.FailRequest{WorkerID: workerID, JobID: jobID, LeaseID: leaseID}
+	jsonBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed marshall req: %v", err)
+	}
+
+	failUrl := fmt.Sprintf("%s/fail", brokerURL)
+	resp, err := client.Post(failUrl, "application/json", bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return fmt.Errorf("network error during fail: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("broker returned unexpected status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
 func main() {
 	workerID := uuid.NewString()
 	log.Printf("Starting Aegis MQ Worker | ID: %s", workerID)
