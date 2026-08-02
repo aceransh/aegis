@@ -2,19 +2,23 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/aceransh/aegis/internal/models"
 	"github.com/google/uuid"
 )
 
-const brokerURL = "http://localhost:8080" // We can make this an env var later
+const brokerURL = "http://localhost:8080"
 
-func pollForJob(client *http.Client, workerID string) (*models.Job, error) {
+func pollForJob(ctx context.Context, client *http.Client, workerID string) (*models.Job, error) {
 	reqBody := models.PollRequest{WorkerID: workerID}
 	jsonBytes, err := json.Marshal(reqBody)
 	if err != nil {
@@ -22,11 +26,20 @@ func pollForJob(client *http.Client, workerID string) (*models.Job, error) {
 	}
 
 	pollUrl := fmt.Sprintf("%s/poll", brokerURL)
-	resp, err := client.Post(pollUrl, "application/json", bytes.NewBuffer(jsonBytes))
+
+	// 2. built a custom request and strapped Context to it
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, pollUrl, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// 3. executed the custom request using client.Do()
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("network error during poll: %v", err)
 	}
-	defer resp.Body.Close() //cleans up the data stream once function is finished
+	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNoContent {
 		return nil, nil //queue is empty
@@ -35,17 +48,15 @@ func pollForJob(client *http.Client, workerID string) (*models.Job, error) {
 		return nil, fmt.Errorf("broker returned unexpected status: %d", resp.StatusCode)
 	}
 
-	//if 200
 	var job models.Job
 	if err := json.NewDecoder(resp.Body).Decode(&job); err != nil {
 		return nil, fmt.Errorf("failed to decode job: %v", err)
 	}
 
 	return &job, nil
-
 }
 
-func ackJob(client *http.Client, workerID string, jobID string, leaseID int64) error {
+func ackJob(ctx context.Context, client *http.Client, workerID string, jobID string, leaseID int64) error {
 	reqBody := models.AckRequest{WorkerID: workerID, JobID: jobID, LeaseID: leaseID}
 	jsonBytes, err := json.Marshal(reqBody)
 	if err != nil {
@@ -53,7 +64,13 @@ func ackJob(client *http.Client, workerID string, jobID string, leaseID int64) e
 	}
 
 	ackUrl := fmt.Sprintf("%s/ack", brokerURL)
-	resp, err := client.Post(ackUrl, "application/json", bytes.NewBuffer(jsonBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ackUrl, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("network error during ack: %v", err)
 	}
@@ -66,7 +83,7 @@ func ackJob(client *http.Client, workerID string, jobID string, leaseID int64) e
 	return nil
 }
 
-func failJob(client *http.Client, workerID string, jobID string, leaseID int64) error {
+func failJob(ctx context.Context, client *http.Client, workerID string, jobID string, leaseID int64) error {
 	reqBody := models.FailRequest{WorkerID: workerID, JobID: jobID, LeaseID: leaseID}
 	jsonBytes, err := json.Marshal(reqBody)
 	if err != nil {
@@ -74,7 +91,13 @@ func failJob(client *http.Client, workerID string, jobID string, leaseID int64) 
 	}
 
 	failUrl := fmt.Sprintf("%s/fail", brokerURL)
-	resp, err := client.Post(failUrl, "application/json", bytes.NewBuffer(jsonBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, failUrl, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("network error during fail: %v", err)
 	}
@@ -91,36 +114,51 @@ func main() {
 	workerID := uuid.NewString()
 	log.Printf("Starting Aegis MQ Worker | ID: %s", workerID)
 
-	// Custom HTTP client to handle Long Polling safely
+	// Create a Context that listens for Ctrl+C (SIGINT) or termination commands (SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop() // This cleans up the signal listener when main() finishes
+
 	client := &http.Client{
-		Timeout: 35 * time.Second, //this destroys the network pipeline so it doesn't stay open forever if the broker dies
+		Timeout: 35 * time.Second,
 	}
 
-	// This is where your infinite worker loop will go
 	for {
-		// 1. Poll for a job
-		job, err := pollForJob(client, workerID)
+		// 1. Check if the OS hit the self-destruct button before we poll
+		select {
+		case <-ctx.Done():
+			log.Println("Graceful shutdown initiated. Worker exiting.")
+			return
+		default:
+			// If not cancelled, fall through and continue loop
+		}
+
+		// 2. Pass the Context into the poll function
+		job, err := pollForJob(ctx, client, workerID)
 		if err != nil {
+			// If the context is canceled during a network request, it throws a context.Canceled error
+			if ctx.Err() != nil {
+				log.Println("Poll interrupted by shutdown signal.")
+				return
+			}
 			log.Printf("Worker ID: %s had an error polling for a job: %v", workerID, err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		// 2. If no job, continue loop
+
 		if job == nil {
 			continue
 		}
-		// 3. If job, execute it
+
 		log.Printf("Acquired Job ID: %s | Executing payload: %s", job.ID, job.Payload)
 		time.Sleep(3 * time.Second) //sim worker doing task
-		// 4. Ack or Fail based on execution result
-		err = ackJob(client, workerID, job.ID, job.LeaseID)
+
+		// 3. We use context.Background() for the ACK.
+		// WHY? Because if the user hits Ctrl+C while the worker is doing a job, we DO NOT want to cancel the ACK request!
+		err = ackJob(context.Background(), client, workerID, job.ID, job.LeaseID)
 		if err != nil {
 			log.Printf("Critical: Failed to ack Job ID: %s | Error: %v", job.ID, err)
-			// If it fails to ack, the broker will eventually time out the lease
-			// and give the job to another worker.
 		} else {
 			log.Printf("Successfully finished and acked Job ID: %s", job.ID)
 		}
-
 	}
 }
