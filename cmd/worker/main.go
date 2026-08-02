@@ -26,7 +26,7 @@ func pollForJob(client *http.Client, workerID string) (*models.Job, error) {
 	if err != nil {
 		return nil, fmt.Errorf("network error during poll: %v", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //cleans up the data stream once function is finished
 
 	if resp.StatusCode == http.StatusNoContent {
 		return nil, nil //queue is empty
@@ -93,14 +93,34 @@ func main() {
 
 	// Custom HTTP client to handle Long Polling safely
 	client := &http.Client{
-		Timeout: 35 * time.Second,
+		Timeout: 35 * time.Second, //this destroys the network pipeline so it doesn't stay open forever if the broker dies
 	}
 
 	// This is where your infinite worker loop will go
 	for {
 		// 1. Poll for a job
+		job, err := pollForJob(client, workerID)
+		if err != nil {
+			log.Printf("Worker ID: %s had an error polling for a job: %v", workerID, err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
 		// 2. If no job, continue loop
+		if job == nil {
+			continue
+		}
 		// 3. If job, execute it
+		log.Printf("Acquired Job ID: %s | Executing payload: %s", job.ID, job.Payload)
+		time.Sleep(3 * time.Second) //sim worker doing task
 		// 4. Ack or Fail based on execution result
+		err = ackJob(client, workerID, job.ID, job.LeaseID)
+		if err != nil {
+			log.Printf("Critical: Failed to ack Job ID: %s | Error: %v", job.ID, err)
+			// If it fails to ack, the broker will eventually time out the lease
+			// and give the job to another worker.
+		} else {
+			log.Printf("Successfully finished and acked Job ID: %s", job.ID)
+		}
+
 	}
 }
