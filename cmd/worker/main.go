@@ -16,7 +16,14 @@ import (
 	"github.com/google/uuid"
 )
 
-const brokerURL = "http://localhost:8080"
+var brokerURL = getEnv("BROKER_URL", "http://localhost:8080")
+
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
+}
 
 func pollForJob(ctx context.Context, client *http.Client, workerID string) (*models.Job, error) {
 	reqBody := models.PollRequest{WorkerID: workerID}

@@ -1,0 +1,43 @@
+services:
+  # 1. The Database
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aegis_user
+      POSTGRES_PASSWORD: aegis_password
+      POSTGRES_DB: aegisDB
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegis_user -d aegisDB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    
+  # 2. The Broker
+  broker:
+    build:
+      context: .
+      args:
+        APP_NAME: broker
+    # NOTICE: environment and ports are aligned with build, not inside it!
+    environment:
+      DB_DSN: "postgres://aegis_user:aegis_password@postgres:5432/aegisDB?sslmode=disable"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # 3. The Worker
+  worker:
+    build:
+      context: .
+      args:
+        APP_NAME: worker
+    environment:
+      BROKER_URL: "http://broker:8080"
+    depends_on:
+      - broker
