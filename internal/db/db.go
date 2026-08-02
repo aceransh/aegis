@@ -15,7 +15,7 @@ var DB *sql.DB
 func InitDB() {
 	var err error
 
-	connStr := os.Getenv("DATABASE_URL")
+	connStr := os.Getenv("DB_DSN")
 	if connStr == "" {
 		connStr = "host=localhost port=5432 user=postgres password=db_password dbname=myDB sslmode=disable"
 	}
