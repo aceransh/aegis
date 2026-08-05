@@ -42,6 +42,7 @@ services:
     depends_on:
       - broker
 
+  # 4. Observability
   prometheus:
     image: prom/prometheus:latest
     ports:
@@ -55,6 +56,8 @@ services:
     image: grafana/grafana:latest
     ports:
       - "3000:3000"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
