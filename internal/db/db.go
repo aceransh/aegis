@@ -31,11 +31,10 @@ func InitDB() {
 		if err = DB.Ping(); err != nil {
 			log.Print("Failed to ping db: ", err)
 			time.Sleep(time.Second * 2)
+			if i == 4 {
+				log.Fatal("completely failed to connect to db after 5 tries")
+			}
 			continue
-		}
-
-		if i == 5 {
-			log.Fatal("completely failed to connect to db after 5 tries")
 		}
 
 		log.Println("Successfully connected to the database!")
