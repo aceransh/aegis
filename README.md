@@ -26,24 +26,28 @@ Aegis is designed for enterprise-grade high availability while offering a cost-o
 
 ---
 
-### 2. Cost-Optimized Deployment (Live Portfolio Demo)
+### 2. Cost-Optimized Deployment (Spin-Up-On-Demand Demo)
 
-*Pragmatic single-AZ configuration running Fargate in public subnets to bypass NAT Gateway overhead ($32/mo) while maintaining private database isolation and the complete AI observability pipeline.*
+*Single-AZ real ECS Fargate + RDS, not a simulated substitute — same primitives as the
+production tier, sized and scheduled for near-zero idle cost instead of removed. Fargate
+tasks run in a **public subnet** with no ALB and no NAT Gateway (both are always-billed
+regardless of traffic, ~$16-20/mo and ~$32/mo respectively, with no free tier at any account
+age), so the task's security group is the isolation boundary instead of subnet placement.
+`desired_count` scales to 0 between sessions rather than staying live, so there's no
+permanent URL — this tier is `apply`'d before a demo and `destroy`'d (or scaled down)
+after, targeting pennies per session rather than a 24/7 bill. RDS `db.t3/t4g.micro`
+single-AZ is free-tier eligible only on accounts under 12 months old — verified per-account,
+not assumed. The AI observability pipeline is unchanged from the target design.*
 
 ```mermaid
 graph TD
     subgraph AWS Cloud
         subgraph Cost-Optimized VPC
-            ALB[Application Load Balancer]
-
             subgraph Availability Zone: us-east-1a
                 subgraph Public Subnet
-                    FARGATE[Fargate: Broker & Worker]
+                    FARGATE[Fargate: Broker & Worker<br/>assign_public_ip = true<br/>desired_count: 0 to N on demand]
                 end
-
-                subgraph Private Subnet
-                    RDS[(PostgreSQL: Single-AZ)]
-                end
+                RDS[(PostgreSQL: Single-AZ<br/>SG-scoped to Fargate task)]
             end
         end
 
@@ -52,8 +56,7 @@ graph TD
     end
 
     %% Internal Traffic Flow
-    Internet((Internet)) --> ALB
-    ALB --> FARGATE
+    Internet((Internet / You)) -->|ephemeral public IP| FARGATE
     FARGATE -->|Read / Write| RDS
 
     %% Observability Flow

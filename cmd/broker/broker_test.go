@@ -399,3 +399,120 @@ func TestExpiredOnAck(t *testing.T) {
 	}
 
 }
+
+func TestFail(t *testing.T) {
+	conn := testutil.NewTestDB(t)
+	srv := NewServer(conn)
+
+	ts := httptest.NewServer(http.HandlerFunc(srv.handleFail))
+	defer ts.Close()
+
+	id := uuid.NewString()
+	_, err := conn.Exec(`
+		INSERT INTO Jobs (id, payload, state, lease_owner, lease_id, lease_expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, id, "test_job", models.StateLeased, "test-worker", 1, time.Now().Unix()+30)
+	if err != nil {
+		t.Fatal("failed to insert job: ", err)
+	}
+
+	reqBody := models.FailRequest{JobID: id, WorkerID: "test-worker", LeaseID: 1}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal req: %v", err)
+	}
+
+	resp, err := http.Post(ts.URL, "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal("Post failed: ", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 but got %d", resp.StatusCode)
+	}
+
+	var state string
+	var attempts int
+	var nextAvailableAt int64
+	err = conn.QueryRow("SELECT state, attempts, next_available_at FROM Jobs WHERE id = $1", id).Scan(&state, &attempts, &nextAvailableAt)
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if state != string(models.StateQueued) {
+		t.Errorf("expected QUEUED, got %s", state)
+	}
+	if attempts != 1 {
+		t.Errorf("expected 1 attempts, got %v", attempts)
+	}
+	if nextAvailableAt < time.Now().Unix() {
+		t.Errorf("expected next available at to be greater than or equal to now: %v but, got %v", time.Now().Unix(), nextAvailableAt)
+	}
+}
+
+func TestDLQ(t *testing.T) {
+	conn := testutil.NewTestDB(t)
+	srv := NewServer(conn)
+
+	ts := httptest.NewServer(http.HandlerFunc(srv.handleFail))
+	defer ts.Close()
+
+	id := uuid.NewString()
+	_, err := conn.Exec(`
+		INSERT INTO Jobs (id, payload, state, lease_owner, lease_id, lease_expires_at, attempts, max_tries)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, id, "test_job", models.StateLeased, "test-worker", 1, time.Now().Unix()+30, 2, 3)
+	if err != nil {
+		t.Fatal("failed to insert job: ", err)
+	}
+
+	reqBody := models.FailRequest{JobID: id, WorkerID: "test-worker", LeaseID: 1}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal req: %v", err)
+	}
+
+	resp, err := http.Post(ts.URL, "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal("Post failed: ", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 but got %d", resp.StatusCode)
+	}
+
+	var state string
+	err = conn.QueryRow("SELECT state FROM Jobs WHERE id = $1", id).Scan(&state)
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if state != string(models.StateDead) {
+		t.Errorf("expected DEAD, got %s", state)
+	}
+}
+
+func TestSweep(t *testing.T) {
+	conn := testutil.NewTestDB(t)
+	srv := NewServer(conn)
+
+	id := uuid.NewString()
+	_, err := conn.Exec(`
+		INSERT INTO Jobs (id, payload, state, lease_owner, lease_id, lease_expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, id, "test_job", models.StateLeased, "test-worker", 1, time.Now().Unix()-1)
+	if err != nil {
+		t.Fatal("failed to insert job: ", err)
+	}
+
+	srv.Sweep()
+
+	var state string
+	err = conn.QueryRow("SELECT state FROM Jobs WHERE id = $1", id).Scan(&state)
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if state != string(models.StateQueued) {
+		t.Errorf("expected QUEUED, got %s", state)
+	}
+}

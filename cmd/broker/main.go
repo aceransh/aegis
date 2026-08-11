@@ -416,7 +416,6 @@ func (s *Server) handleFail(w http.ResponseWriter, r *http.Request) {
 			"attempts": job.Attempts,
 		})
 
-		w.WriteHeader(http.StatusOK)
 	} else {
 
 		// Retry later with backoff + full jitter
