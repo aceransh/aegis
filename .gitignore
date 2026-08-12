@@ -35,3 +35,9 @@ go.work.sum
 .claude/
 CLAUDE.md
 
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+crash.log.*
+
