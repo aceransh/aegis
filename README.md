@@ -33,11 +33,14 @@ production tier, sized and scheduled for near-zero idle cost instead of removed.
 tasks run in a **public subnet** with no ALB and no NAT Gateway (both are always-billed
 regardless of traffic, ~$16-20/mo and ~$32/mo respectively, with no free tier at any account
 age), so the task's security group is the isolation boundary instead of subnet placement.
-`desired_count` scales to 0 between sessions rather than staying live, so there's no
-permanent URL — this tier is `apply`'d before a demo and `destroy`'d (or scaled down)
-after, targeting pennies per session rather than a 24/7 bill. RDS `db.t3/t4g.micro`
-single-AZ is free-tier eligible only on accounts under 12 months old — verified per-account,
-not assumed. The AI observability pipeline is unchanged from the target design.*
+RDS sits in a genuinely **private subnet** — it never initiates outbound traffic, so it needs
+no NAT/egress path at all, meaning it costs nothing extra to keep it off the public internet
+entirely, unlike the compute side. `desired_count` scales to 0 between sessions rather than
+staying live, so there's no permanent URL — this tier is `apply`'d before a demo and
+`destroy`'d (or scaled down) after, targeting pennies per session rather than a 24/7 bill.
+RDS `db.t3/t4g.micro` single-AZ is free-tier eligible only on accounts under 12 months old —
+verified per-account, not assumed. The AI observability pipeline is unchanged from the target
+design.*
 
 ```mermaid
 graph TD
@@ -47,7 +50,9 @@ graph TD
                 subgraph Public Subnet
                     FARGATE[Fargate: Broker & Worker<br/>assign_public_ip = true<br/>desired_count: 0 to N on demand]
                 end
-                RDS[(PostgreSQL: Single-AZ<br/>SG-scoped to Fargate task)]
+                subgraph Private Subnet
+                    RDS[(PostgreSQL: Single-AZ<br/>SG-scoped to Fargate task only<br/>no NAT needed - no outbound traffic)]
+                end
             end
         end
 

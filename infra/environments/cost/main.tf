@@ -1,3 +1,7 @@
+module "networking" {
+  source = "../../modules/networking"
+}
+
 resource "aws_budgets_budget" "cost" {
   name         = "budget-aegis-monthly"
   budget_type  = "COST"
