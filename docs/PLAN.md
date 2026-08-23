@@ -7,7 +7,7 @@ day to know exactly where things left off. This file follows the same **Struggle
 rules as the rest of the project (see `CLAUDE.md`) — it tracks *what* needs to happen, not
 *how to code it*; guidance still gets given one small step at a time, not as finished blocks.
 
-**Status: Day 1, Layer 2 in progress.**
+**Status: Day 2 complete. Starting Day 3 (ECS compute, part 2).**
 
 **On the timeline:** originally scoped at 15 days; extended to **20** once Phase 3 turned out
 to need a real design step this plan was initially missing — how broker error data actually
@@ -24,23 +24,30 @@ reasoning as before: don't compress real scope just to hit a date.
 - [x] Public subnet (`us-east-1a`) + private subnet (`us-east-1b`)
 - [x] Internet Gateway, attached to the VPC
 - [x] Public route table (`0.0.0.0/0 → igw`) + association to the public subnet
-- [ ] Security group for the Fargate compute (broker/worker) — ingress on the broker's port
+- [x] Security group for the Fargate compute (broker/worker) — ingress on the broker's port
       from `0.0.0.0/0` (no ALB in this tier), egress open
-- [ ] Security group for RDS — ingress on `5432` scoped **only** to the compute security
+- [x] Security group for RDS — ingress on `5432` scoped **only** to the compute security
       group, never `0.0.0.0/0`
-- [ ] `variables.tf` / `outputs.tf` for the networking module (expose VPC ID, both subnet
+- [x] `variables.tf` / `outputs.tf` for the networking module (expose VPC ID, both subnet
       IDs, both security group IDs — whatever `environments/cost/` will need to consume)
-- [ ] Wire the module into `environments/cost/main.tf` via a `module "networking" { source =
+- [x] Wire the module into `environments/cost/main.tf` via a `module "networking" { source =
       "../../modules/networking" ... }` block — not yet called anywhere
-- [ ] `terraform plan` / `apply` from `environments/cost/`, confirm the VPC and both subnets
+- [x] `terraform plan` / `apply` from `environments/cost/`, confirm the VPC and both subnets
       actually exist in the console
 
 ## Day 2 — Layer 3: ECS compute, part 1
-- [ ] ECS cluster resource
-- [ ] Task execution role (pulls the image, ships logs) vs. task role (app's own AWS
-      permissions, if any) — understand the distinction before writing either
-- [ ] Task definition for the broker (container image source, CPU/memory sizing, port
-      mapping, environment variables placeholder for `DB_DSN`)
+- [x] ECS cluster resource
+- [x] Task execution role (pulls the image, ships logs) vs. task role (app's own AWS
+      permissions, if any) — understand the distinction before writing either. Decided: no
+      task role needed — broker/worker's Go code makes no direct AWS API calls, only an
+      execution role was built.
+- [x] Task definition for the broker (container image source, CPU/memory sizing, port
+      mapping, environment variables placeholder for `DB_DSN`) — `image` left as an explicit
+      placeholder (`"idk"`), same treatment as `DB_DSN`, to be replaced once Day 3 actually
+      builds and pushes the image to ECR. Also flagged for Day 3: Mac (Apple Silicon) Docker
+      builds default to ARM64 — either build with `--platform linux/amd64` or add
+      `runtime_platform { cpu_architecture = "ARM64" }` to match, or the task will fail on an
+      architecture mismatch.
 
 ## Day 3 — Layer 3: ECS compute, part 2
 - [ ] Task definition for the worker (mirrors broker's shape, `BROKER_URL` placeholder)
