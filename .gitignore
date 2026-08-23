@@ -34,6 +34,7 @@ go.work.sum
 # Claude files
 .claude/
 CLAUDE.md
+docs/PLAN.md
 
 # Terraform
 .terraform/
