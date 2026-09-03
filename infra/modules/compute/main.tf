@@ -88,7 +88,7 @@ resource "aws_ecs_service" "broker" {
   name            = "broker"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.broker.arn
-  desired_count   = 1
+  desired_count   = 0
   depends_on      = [aws_iam_role_policy_attachment.main]
   launch_type     = "FARGATE"
 
@@ -103,7 +103,7 @@ resource "aws_ecs_service" "worker" {
   name            = "worker"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.worker.arn
-  desired_count   = 1
+  desired_count   = 0
   depends_on      = [aws_iam_role_policy_attachment.main]
   launch_type     = "FARGATE"
 
