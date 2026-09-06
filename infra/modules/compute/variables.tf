@@ -9,3 +9,8 @@ variable "public_subnet_id" {
 variable "compute_security_group_id" {
   type = string
 }
+
+variable "db_dsn" {
+  sensitive = true
+  type      = string
+}

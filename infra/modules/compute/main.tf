@@ -1,5 +1,13 @@
 resource "aws_ecs_cluster" "main" {
   name = var.cluster_name
+
+  service_connect_defaults {
+    namespace = aws_service_discovery_http_namespace.main.arn
+  }
+}
+
+resource "aws_service_discovery_http_namespace" "main" {
+  name = "main"
 }
 
 resource "aws_iam_role" "main" {
@@ -42,6 +50,7 @@ resource "aws_ecs_task_definition" "broker" {
 
       portMappings = [
         {
+          name          = "broker"
           containerPort = 8080
           hostPort      = 8080
           protocol      = "tcp"
@@ -51,7 +60,7 @@ resource "aws_ecs_task_definition" "broker" {
       environment = [
         {
           name  = "DB_DSN"
-          value = "placeholder"
+          value = var.db_dsn
         }
       ]
     }
@@ -76,7 +85,7 @@ resource "aws_ecs_task_definition" "worker" {
       environment = [
         {
           name  = "BROKER_URL"
-          value = "placeholder"
+          value = "http://broker:8080"
         }
       ]
     }
@@ -97,6 +106,17 @@ resource "aws_ecs_service" "broker" {
     security_groups  = [var.compute_security_group_id]
     subnets          = [var.public_subnet_id]
   }
+
+  service_connect_configuration {
+    enabled = true
+    service {
+      port_name = "broker"
+      client_alias {
+        dns_name = "broker"
+        port     = 8080
+      }
+    }
+  }
 }
 
 resource "aws_ecs_service" "worker" {
@@ -111,6 +131,10 @@ resource "aws_ecs_service" "worker" {
     assign_public_ip = true
     security_groups  = [var.compute_security_group_id]
     subnets          = [var.public_subnet_id]
+  }
+
+  service_connect_configuration {
+    enabled = true
   }
 }
 

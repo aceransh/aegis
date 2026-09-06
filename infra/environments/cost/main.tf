@@ -8,6 +8,10 @@ variable "password" {
   type      = string
 }
 
+locals {
+  db_dsn = "host=${module.database.db_address} port=${module.database.db_port} user=${var.username} password=${var.password} dbname=${module.database.db_name} sslmode=require"
+}
+
 module "networking" {
   source = "../../modules/networking"
 }
@@ -17,6 +21,7 @@ module "compute" {
   cluster_name              = "cost"
   public_subnet_id          = module.networking.public_subnet_id
   compute_security_group_id = module.networking.compute_security_group_id
+  db_dsn                    = local.db_dsn
 }
 
 module "database" {
