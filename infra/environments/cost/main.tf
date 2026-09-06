@@ -1,3 +1,13 @@
+variable "username" {
+  sensitive = true
+  type      = string
+}
+
+variable "password" {
+  sensitive = true
+  type      = string
+}
+
 module "networking" {
   source = "../../modules/networking"
 }
@@ -7,6 +17,14 @@ module "compute" {
   cluster_name              = "cost"
   public_subnet_id          = module.networking.public_subnet_id
   compute_security_group_id = module.networking.compute_security_group_id
+}
+
+module "database" {
+  source                = "../../modules/database"
+  subnets               = [module.networking.private_subnet_id1, module.networking.private_subnet_id2]
+  username              = var.username
+  password              = var.password
+  rds_security_group_id = module.networking.rds_security_group_id
 }
 
 resource "aws_budgets_budget" "cost" {

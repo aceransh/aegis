@@ -41,4 +41,6 @@ docs/PLAN.md
 *.tfstate
 *.tfstate.backup
 crash.log.*
+*.tfvars
+*.tfvars.json
 
