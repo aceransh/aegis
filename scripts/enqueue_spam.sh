@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-URL="http://localhost:8080/enqueue"
+BROKER_URL="${BROKER_URL:-http://localhost:8080}"
+URL="$BROKER_URL/enqueue"
 
 while true; do
     curl -s -X POST "$URL" \

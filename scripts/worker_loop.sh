@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-BROKER_URL="http://localhost:8080"
+BROKER_URL="${BROKER_URL:-http://localhost:8080}"
 WORKER_ID="${1:-worker-1}"
 
 while true; do

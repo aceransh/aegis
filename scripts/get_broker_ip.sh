@@ -14,7 +14,7 @@ if [ "$task_arn" == "None" ] || [ -z "$task_arn" ]; then
 fi
 
 eni_id=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$task_arn" \
-  --no-cli-pager --query "tasks[0].attachments[0].details[?name=='networkInterfaceId'].value" --output text)
+  --no-cli-pager --query "tasks[0].attachments[?type=='ElasticNetworkInterface']|[0].details[?name=='networkInterfaceId'].value" --output text)
 
 public_ip=$(aws ec2 describe-network-interfaces --network-interface-ids "$eni_id" \
   --no-cli-pager --query 'NetworkInterfaces[0].Association.PublicIp' --output text)

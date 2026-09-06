@@ -1,10 +1,14 @@
-CREATE TYPE job_state AS ENUM ('QUEUED', 'LEASED', 'DONE', 'DEAD');
+DO $$ BEGIN
+    CREATE TYPE job_state AS ENUM ('QUEUED', 'LEASED', 'DONE', 'DEAD');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
-CREATE TABLE Jobs (
+CREATE TABLE IF NOT EXISTS Jobs (
     id UUID PRIMARY KEY,
     payload TEXT NOT NULL,
     state job_state NOT NULL DEFAULT 'QUEUED',
-    
+
     lease_owner VARCHAR(255),
     lease_expires_at BIGINT,
     lease_id BIGINT NOT NULL DEFAULT 0,
@@ -16,7 +20,7 @@ CREATE TABLE Jobs (
 
 CREATE INDEX IF NOT EXISTS idx_jobs_state_next_available ON Jobs (state, next_available_at);
 
-CREATE TABLE Idems (
+CREATE TABLE IF NOT EXISTS Idems (
     idem_key TEXT PRIMARY KEY,
     job_id UUID,
 

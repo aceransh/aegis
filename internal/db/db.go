@@ -3,12 +3,16 @@ package db
 import (
 	"database/sql"
 
+	_ "embed"
 	"log"
 	"os"
 	"time"
 
 	_ "github.com/lib/pq"
 )
+
+//go:embed schema.sql
+var schemaSQL string
 
 var DB *sql.DB
 
@@ -40,4 +44,9 @@ func InitDB() {
 		log.Println("Successfully connected to the database!")
 		break
 	}
+
+	if _, err := DB.Exec(schemaSQL); err != nil {
+		log.Fatal("failed to apply schema migration: ", err)
+	}
+	log.Println("Schema migration applied (or already up to date).")
 }
