@@ -18,4 +18,5 @@ resource "aws_db_instance" "default" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [var.rds_security_group_id]
   skip_final_snapshot    = true
+  multi_az               = var.multi_az
 }

@@ -1,3 +1,12 @@
+locals {
+  # ECR repo names are unique per account+region, not per VPC — a second
+  # environment can't create its own "broker"/"worker" repos without
+  # colliding with the first. create_ecr_repos lets a caller (prod) skip
+  # creation and hand in an already-existing repo URL instead.
+  broker_repo_url = var.create_ecr_repos ? aws_ecr_repository.broker[0].repository_url : var.broker_image_url
+  worker_repo_url = var.create_ecr_repos ? aws_ecr_repository.worker[0].repository_url : var.worker_image_url
+}
+
 resource "aws_ecs_cluster" "main" {
   name = var.cluster_name
 
@@ -7,11 +16,15 @@ resource "aws_ecs_cluster" "main" {
 }
 
 resource "aws_service_discovery_http_namespace" "main" {
-  name = "main"
+  # Cloud Map HTTP namespaces are account+region scoped (no VPC
+  # association), so this needs to be unique across environments too.
+  name = "${var.cluster_name}-main"
 }
 
 resource "aws_iam_role" "main" {
-  name = "task-exec-role"
+  # Same reasoning as the namespace above — IAM role names are account-wide
+  # unique, not scoped per VPC.
+  name = "${var.cluster_name}-task-exec-role"
 
   # Terraform's "jsonencode" function converts a
   # Terraform expression result to valid JSON syntax.
@@ -46,7 +59,7 @@ resource "aws_ecs_task_definition" "broker" {
   container_definitions = jsonencode([
     {
       name  = "app"
-      image = "${aws_ecr_repository.broker.repository_url}:latest"
+      image = "${local.broker_repo_url}:latest"
 
       portMappings = [
         {
@@ -80,7 +93,7 @@ resource "aws_ecs_task_definition" "worker" {
   container_definitions = jsonencode([
     {
       name  = "app"
-      image = "${aws_ecr_repository.worker.repository_url}:latest"
+      image = "${local.worker_repo_url}:latest"
 
       environment = [
         {
@@ -102,9 +115,20 @@ resource "aws_ecs_service" "broker" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    assign_public_ip = true
+    assign_public_ip = var.assign_public_ip
     security_groups  = [var.compute_security_group_id]
-    subnets          = [var.public_subnet_id]
+    subnets          = var.subnet_ids
+  }
+
+  # Empty for cost (no ALB) — for prod, target_group_arn is set and this
+  # attaches the service to the ALB's target group.
+  dynamic "load_balancer" {
+    for_each = var.target_group_arn != "" ? [var.target_group_arn] : []
+    content {
+      target_group_arn = load_balancer.value
+      container_name   = "app"
+      container_port   = 8080
+    }
   }
 
   service_connect_configuration {
@@ -128,9 +152,9 @@ resource "aws_ecs_service" "worker" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    assign_public_ip = true
+    assign_public_ip = var.assign_public_ip
     security_groups  = [var.compute_security_group_id]
-    subnets          = [var.public_subnet_id]
+    subnets          = var.subnet_ids
   }
 
   service_connect_configuration {
@@ -139,6 +163,7 @@ resource "aws_ecs_service" "worker" {
 }
 
 resource "aws_ecr_repository" "broker" {
+  count        = var.create_ecr_repos ? 1 : 0
   name         = "broker"
   force_delete = true
 
@@ -148,6 +173,7 @@ resource "aws_ecr_repository" "broker" {
 }
 
 resource "aws_ecr_repository" "worker" {
+  count        = var.create_ecr_repos ? 1 : 0
   name         = "worker"
   force_delete = true
 
@@ -155,4 +181,3 @@ resource "aws_ecr_repository" "worker" {
     scan_on_push = true
   }
 }
-

@@ -16,3 +16,8 @@ variable "rds_security_group_id" {
   type = string
 }
 
+variable "multi_az" {
+  type    = bool
+  default = false
+}
+

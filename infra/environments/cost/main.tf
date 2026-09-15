@@ -19,7 +19,7 @@ module "networking" {
 module "compute" {
   source                    = "../../modules/compute"
   cluster_name              = "cost"
-  public_subnet_id          = module.networking.public_subnet_id
+  subnet_ids                = [module.networking.public_subnet_id]
   compute_security_group_id = module.networking.compute_security_group_id
   db_dsn                    = local.db_dsn
 }
