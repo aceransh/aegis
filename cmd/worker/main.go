@@ -17,6 +17,7 @@ import (
 )
 
 var brokerURL = getEnv("BROKER_URL", "http://localhost:8080")
+var authToken = getEnv("AUTH_TOKEN", "")
 
 func getEnv(key, fallback string) string {
 	if value, exists := os.LookupEnv(key); exists {
@@ -40,6 +41,7 @@ func pollForJob(ctx context.Context, client *http.Client, workerID string) (*mod
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+authToken)
 
 	// 3. executed the custom request using client.Do()
 	resp, err := client.Do(req)
@@ -76,6 +78,7 @@ func ackJob(ctx context.Context, client *http.Client, workerID string, jobID str
 		return fmt.Errorf("failed to create request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+authToken)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -103,6 +106,7 @@ func failJob(ctx context.Context, client *http.Client, workerID string, jobID st
 		return fmt.Errorf("failed to create request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+authToken)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -118,6 +122,10 @@ func failJob(ctx context.Context, client *http.Client, workerID string, jobID st
 }
 
 func main() {
+	if authToken == "" {
+		log.Fatal("AUTH_TOKEN must be set")
+	}
+
 	workerID := uuid.NewString()
 	log.Printf("Starting Aegis MQ Worker | ID: %s", workerID)
 

@@ -74,6 +74,10 @@ resource "aws_ecs_task_definition" "broker" {
         {
           name  = "DB_DSN"
           value = var.db_dsn
+        },
+        {
+          name  = "AUTH_TOKEN"
+          value = var.auth_token
         }
       ]
     }
@@ -99,6 +103,10 @@ resource "aws_ecs_task_definition" "worker" {
         {
           name  = "BROKER_URL"
           value = "http://broker:8080"
+        },
+        {
+          name  = "AUTH_TOKEN"
+          value = var.auth_token
         }
       ]
     }

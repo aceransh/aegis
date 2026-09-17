@@ -2,9 +2,15 @@
 BROKER_URL="${BROKER_URL:-http://localhost:8080}"
 WORKER_ID="${1:-worker-1}"
 
+if [[ -z "$AUTH_TOKEN" ]]; then
+    echo "[worker $WORKER_ID] AUTH_TOKEN must be set" >&2
+    exit 1
+fi
+
 while true; do
     RESPONSE=$(curl -s -X POST "$BROKER_URL/poll" \
     -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $AUTH_TOKEN" \
     -d "{\"worker_id\":\"$WORKER_ID\"}")
 
     if [[ -z "$RESPONSE" ]]; then
@@ -21,12 +27,14 @@ while true; do
         echo "[worker $WORKER_ID] ACK job $JOB_ID lease $LEASE_ID"
         curl -s -X POST "$BROKER_URL/ack" \
         -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $AUTH_TOKEN" \
         -d "{\"worker_id\":\"$WORKER_ID\",\"job_id\":\"$JOB_ID\",\"lease_id\":$LEASE_ID}"
-    
+
     elif ((ACTION <= 7)); then
         echo "[worker $WORKER_ID] FAIL job $JOB_ID lease $LEASE_ID"
         curl -s -X POST "$BROKER_URL/fail" \
         -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $AUTH_TOKEN" \
         -d "{\"worker_id\":\"$WORKER_ID\",\"job_id\":\"$JOB_ID\",\"lease_id\":$LEASE_ID}"
     
     else

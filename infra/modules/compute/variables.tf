@@ -20,6 +20,11 @@ variable "db_dsn" {
   type      = string
 }
 
+variable "auth_token" {
+  sensitive = true
+  type      = string
+}
+
 variable "target_group_arn" {
   type    = string
   default = ""

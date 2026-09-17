@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -618,6 +620,34 @@ func retryDelaySeconds(attempts int) int64 {
 	return rand.Int63n(delay + 1) //random delay between 0 and delay
 }
 
+// requireAuth wraps a handler so it only runs if the request carries the
+// correct "Authorization: Bearer <token>" header. subtle.ConstantTimeCompare
+// (not ==) matters here specifically because == short-circuits on the first
+// mismatched byte — over many requests that timing difference leaks how many
+// leading bytes of a guess were correct. ConstantTimeCompare always checks
+// every byte, so the comparison itself reveals nothing.
+func requireAuth(token string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		const prefix = "Bearer "
+
+		header := r.Header.Get("Authorization")
+		if !strings.HasPrefix(header, prefix) {
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		provided := strings.TrimPrefix(header, prefix)
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		next(w, r)
+	}
+}
+
 func logEvent(event string, fields map[string]any) { //formats logs so that its space seperated and always starts with what event happened
 	msg := fmt.Sprintf("event=%s", event)
 	for k, v := range fields {
@@ -633,24 +663,36 @@ func init() {
 }
 
 func main() {
+	authToken := os.Getenv("AUTH_TOKEN")
+	if authToken == "" {
+		// Fail closed: refuse to boot rather than silently serving every
+		// protected route unauthenticated because the env var was forgotten.
+		log.Fatal("AUTH_TOKEN must be set")
+	}
+
 	db.InitDB()
 	srv := NewServer(db.DB)
 
+	// /health and /metrics stay open — both are only ever hit from a
+	// trusted context (LB/monitoring health checks, and Prometheus, which
+	// in this project only ever scrapes the local docker-compose broker,
+	// never the deployed public IP), and gating them buys little beyond
+	// one more place the token has to be threaded through.
 	http.HandleFunc("/health", srv.handleHealth)
 
 	http.Handle("/metrics", promhttp.Handler())
 
-	http.HandleFunc("/enqueue", srv.handleEnqueue)
+	http.HandleFunc("/enqueue", requireAuth(authToken, srv.handleEnqueue))
 
-	http.HandleFunc("/poll", srv.handlePoll)
+	http.HandleFunc("/poll", requireAuth(authToken, srv.handlePoll))
 
-	http.HandleFunc("/ack", srv.handleAck)
+	http.HandleFunc("/ack", requireAuth(authToken, srv.handleAck))
 
-	http.HandleFunc("/fail", srv.handleFail)
+	http.HandleFunc("/fail", requireAuth(authToken, srv.handleFail))
 
-	http.HandleFunc("/jobs", srv.handleJobs)
+	http.HandleFunc("/jobs", requireAuth(authToken, srv.handleJobs))
 
-	http.HandleFunc("/dead", srv.handleDead)
+	http.HandleFunc("/dead", requireAuth(authToken, srv.handleDead))
 
 	// --- BACKGROUND PROCESSES ---
 

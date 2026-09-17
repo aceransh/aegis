@@ -8,6 +8,11 @@ variable "password" {
   type      = string
 }
 
+variable "auth_token" {
+  sensitive = true
+  type      = string
+}
+
 locals {
   db_dsn = "host=${module.database.db_address} port=${module.database.db_port} user=${var.username} password=${var.password} dbname=${module.database.db_name} sslmode=require"
 }
@@ -34,6 +39,7 @@ module "compute" {
   create_ecr_repos          = false
   broker_image_url          = data.aws_ecr_repository.broker.repository_url
   worker_image_url          = data.aws_ecr_repository.worker.repository_url
+  auth_token                = var.auth_token
 }
 
 module "database" {
